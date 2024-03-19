@@ -12,10 +12,6 @@ from wcwidth import wcswidth
 __version__ = '0.1.0'
 
 
-# Disregard any Python interpreter versions older than this
-EOL_VERSION = (3, 7)
-
-
 OS = str
 Architecture = str
 PyVersion = str
@@ -32,6 +28,11 @@ Matrix = dict[tuple[PyVersion, OS, Architecture], bool]
 
 
 def get_arch(tag: str) -> Architecture:
+    """Get the architecture targeted by a wheel platform tag.
+
+    This only applies for certain OSes, so don't use this directly, use
+    get_os_arch() instead.
+    """
     if tag.endswith('_x86_64'):
         return 'x86_64'
     elif tag.endswith('_i686'):
@@ -44,6 +45,7 @@ def get_arch(tag: str) -> Architecture:
 
 
 def get_os_arch(tag: str) -> tuple[OS, Architecture]:
+    """Identify the OS and architecture targeted by a wheel platform tag."""
     if tag.startswith('manylinux'):
         return 'linux', get_arch(tag)
     if tag.startswith('musllinux'):
@@ -59,17 +61,39 @@ def get_os_arch(tag: str) -> tuple[OS, Architecture]:
 
 @cache
 def get_cpython_versions() -> list[str]:
-    """Get all released versions of CPython."""
-    resp = httpx.get('https://www.python.org/ftp/python/').raise_for_status()
+    """Get all maintained versions of CPython.
+
+    We use the GitHub REST API for this, to find the dev branches in the
+    CPython repository. This approach excludes EOL interpreters (the branch is
+    deleted) and also alpha releases (the branch is not yet cut, development
+    happens on `main`.)
+    """
     found: set[tuple[int, ...]] = set()
-    for v in re.findall(r'<a href="(\d+(?:\.\d+)+)/">', resp.text):
-        k = tuple(int(component) for component in v.split('.'))
-        found.add(k[:2])
+    for branch in get_github_repo_branches('python', 'cpython'):
+        if mo := re.match(r'(\d+)\.(\d+)', branch):
+            maj, min = mo.groups()
+            found.add((int(maj), int(min)))
     return [
         'cp{}{}'.format(*v)
         for v in sorted(found, reverse=True)
-        if v > EOL_VERSION
     ]
+
+
+def get_github_repo_branches(owner: str, repo: str) -> list[str]:
+    """Fetch the branch names from a GitHub repository.
+
+    Parameters:
+    - owner: A string representing the username of the repository owner.
+    - repo: A string representing the repository name.
+
+    Returns:
+    - A list of strings where each string is a branch name.
+    """
+    url = f"https://api.github.com/repos/{owner}/{repo}/branches"
+    response = httpx.get(url).raise_for_status()
+    branches = response.json()
+    branch_names = [branch['name'] for branch in branches]
+    return branch_names
 
 
 def get_pypi_json(package: str) -> dict:
