@@ -24,7 +24,7 @@ jobs:
       - name: Extract version from filename
         id: version
         run: |
-          VERSION=$(ls -1 dist/*.tar.gz | 's/.*\/wheel_matrix-\(.*\)\.tar\.gz/\1/p')
+          VERSION=$(ls -1 dist/*.tar.gz | sed -n 's/.*\/wheel_matrix-\(.*\)\.tar\.gz/\1/p')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Fetch tags
