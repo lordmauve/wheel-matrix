@@ -117,7 +117,10 @@ def interp_to_version(interp: str) -> tuple[int, int]:
     >>> interp_to_version('cp310')
     (3, 10)
     """
-    return int(interp.removeprefix('cp3'))
+    if mo := re.match(r'[a-z]{2}(\d)(\d+)', interp):
+        maj, minor = mo.groups()
+        return int(maj), int(minor)
+    raise ValueError(f"Failed to parse interpreter string {interp!r}")
 
 
 def get_triples(
@@ -140,7 +143,7 @@ def get_triples(
                 if interp_to_version(p) >= minversion
             }
         else:
-            interpreters = [tag.interpreter]
+            interpreters = {tag.interpreter}
         for os, arch in get_os_arches(tag.platform):
             for i in interpreters:
                 triples.add((i, os, arch))
