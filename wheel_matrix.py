@@ -10,7 +10,7 @@ import re
 from packaging.utils import parse_wheel_filename
 from wcwidth import wcswidth
 
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 
 OS = str
@@ -24,8 +24,8 @@ PLATFORMS = {
     'mac': ['x86_64', 'arm64'],
 }
 
-
-Matrix = dict[tuple[PyVersion, OS, Architecture], bool]
+Triple = tuple[PyVersion, OS, Architecture]
+Matrix = dict[Triple, bool]
 
 
 def get_arch(tag: str) -> Architecture:
@@ -48,7 +48,8 @@ def get_arch(tag: str) -> Architecture:
 def get_os_arches(tag: str) -> Iterable[tuple[OS, Architecture]]:
     """Identify the OS and architecture targeted by a wheel platform tag."""
     if tag.startswith('manylinux'):
-        return 'linux', get_arch(tag)
+        yield 'linux', get_arch(tag)
+        return
     if tag.startswith('musllinux'):
         yield 'musllinux', get_arch(tag)
         return
@@ -110,6 +111,42 @@ def get_pypi_json(package: str) -> dict:
     return httpx.get(f'https://pypi.org/pypi/{package}/json').raise_for_status().json()
 
 
+def interp_to_version(interp: str) -> tuple[int, int]:
+    """Given an interpreter string, return its (major, minor) version.
+
+    >>> interp_to_version('cp310')
+    (3, 10)
+    """
+    return int(interp.removeprefix('cp3'))
+
+
+def get_triples(
+    wheel_filename: str,
+    cpythons: list[str] = None,
+) -> set[Triple]:
+    """Get the (PyVersion, OS, Architecture) triples served by the given wheel.
+
+    """
+    if cpythons is None:
+        cpythons = get_cpython_versions()
+
+    triples = set()
+    pkg, v, build, tags = parse_wheel_filename(wheel_filename)
+    for tag in tags:
+        if tag.abi == 'abi3':
+            minversion = interp_to_version(tag.interpreter)
+            interpreters = {tag.interpreter} | {
+                p for p in cpythons
+                if interp_to_version(p) >= minversion
+            }
+        else:
+            interpreters = [tag.interpreter]
+        for os, arch in get_os_arches(tag.platform):
+            for i in interpreters:
+                triples.add((i, os, arch))
+    return triples
+
+
 def identify_wheels(package: str, version: str | None = None, /):
     """Identify wheels for the given package and version.
 
@@ -131,14 +168,12 @@ def identify_wheels(package: str, version: str | None = None, /):
     for r in releases:
         filename = r['filename']
         if filename.endswith('.whl'):
-            pkg, v, build, tags = parse_wheel_filename(filename)
-            for tag in tags:
-                for os, arch in get_os_arches(tag.platform):
-                    if arch not in platforms.setdefault(os, []):
-                        platforms[os].append(arch)
-                    if tag.interpreter not in pythons:
-                        pythons.append(tag.interpreter)
-                    matrix[tag.interpreter, os, arch] = True
+            for interpreter, os, arch in get_triples(filename):
+                if arch not in platforms.setdefault(os, []):
+                    platforms[os].append(arch)
+                if interpreter not in pythons:
+                    pythons.append(interpreter)
+                matrix[interpreter, os, arch] = True
         elif filename.endswith('.tar.gz'):
             sdist = True
 
@@ -154,7 +189,6 @@ def identify_wheels(package: str, version: str | None = None, /):
                 has_wheel = matrix.get((python, os, arch), False)
                 row.append('✅' if has_wheel else '❌')
         table.append(row)
-
 
     col_widths = [0] * len(table[0])
     for row in table:
