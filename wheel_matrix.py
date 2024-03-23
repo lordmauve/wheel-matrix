@@ -2,6 +2,7 @@
 from copy import deepcopy
 from functools import cache
 import sys
+from typing import Iterable
 import httpx
 import defopt
 import json
@@ -9,7 +10,7 @@ import re
 from packaging.utils import parse_wheel_filename
 from wcwidth import wcswidth
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 
 OS = str
@@ -44,18 +45,26 @@ def get_arch(tag: str) -> Architecture:
     raise ValueError(f'Unknown architecture for {tag}')
 
 
-def get_os_arch(tag: str) -> tuple[OS, Architecture]:
+def get_os_arches(tag: str) -> Iterable[tuple[OS, Architecture]]:
     """Identify the OS and architecture targeted by a wheel platform tag."""
     if tag.startswith('manylinux'):
         return 'linux', get_arch(tag)
     if tag.startswith('musllinux'):
-        return 'musllinux', get_arch(tag)
+        yield 'musllinux', get_arch(tag)
+        return
     elif tag == 'win32':
-        return 'windows', 'win32'
+        yield 'windows', 'win32'
+        return
     elif tag == 'win_amd64':
-        return 'windows', 'amd64'
+        yield 'windows', 'amd64'
+        return
     elif tag.startswith('macosx'):
-        return 'mac', get_arch(tag)
+        if tag.endswith('_universal2'):
+            for arch in ('x86_64', 'arm64'):
+                yield 'mac', arch
+        else:
+            yield 'mac', get_arch(tag)
+        return
     raise ValueError(f'Unknown wheel target {tag}')
 
 
@@ -124,12 +133,12 @@ def identify_wheels(package: str, version: str | None = None, /):
         if filename.endswith('.whl'):
             pkg, v, build, tags = parse_wheel_filename(filename)
             for tag in tags:
-                os, arch = get_os_arch(tag.platform)
-                if arch not in platforms.setdefault(os, []):
-                    platforms[os].append(arch)
-                if tag.interpreter not in pythons:
-                    pythons.append(tag.interpreter)
-                matrix[tag.interpreter, os, arch] = True
+                for os, arch in get_os_arches(tag.platform):
+                    if arch not in platforms.setdefault(os, []):
+                        platforms[os].append(arch)
+                    if tag.interpreter not in pythons:
+                        pythons.append(tag.interpreter)
+                    matrix[tag.interpreter, os, arch] = True
         elif filename.endswith('.tar.gz'):
             sdist = True
 
