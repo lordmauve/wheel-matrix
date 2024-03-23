@@ -125,7 +125,7 @@ def interp_to_version(interp: str) -> tuple[int, int]:
 
 def get_triples(
     wheel_filename: str,
-    cpythons: list[str] = None,
+    cpythons: list[str] | None = None,
 ) -> set[Triple]:
     """Get the (PyVersion, OS, Architecture) triples served by the given wheel.
 
