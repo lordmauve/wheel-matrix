@@ -10,7 +10,7 @@ import re
 from packaging.utils import parse_wheel_filename
 from wcwidth import wcswidth
 
-__version__ = '0.3.0'
+__version__ = '0.3.1'
 
 
 OS = str
@@ -150,6 +150,17 @@ def get_triples(
     return triples
 
 
+def sort_key(python: str) -> tuple:
+    """Return a key with which to compare Python interpreter codes.
+
+    CPython prefixes sort first, and versions are sorted in descending order.
+    """
+    if mo := re.match('([a-z]+)(\d)(\d+)', python):
+        prefix, maj, min = mo.groups()
+        return prefix != 'cp', prefix, -int(maj), -int(min)
+    return False, python,
+
+
 def identify_wheels(package: str, version: str | None = None, /):
     """Identify wheels for the given package and version.
 
@@ -185,6 +196,7 @@ def identify_wheels(package: str, version: str | None = None, /):
     for os, archs in platforms.items():
         for arch in archs:
             headers.append(f'{os} {arch}')
+    pythons.sort(key=sort_key)
     for python in pythons:
         row = [python]
         for os, archs in platforms.items():
