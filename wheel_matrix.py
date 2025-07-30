@@ -18,10 +18,25 @@ Architecture = str
 PyVersion = str
 
 
-PLATFORMS = {
-    'linux': ['x86_64', 'i686'],
+#: Recommended OS/architecture combinations to display.
+#:
+#: These targets are widely used and keep the default table manageable. When
+#: wheel files for additional architectures are encountered the table grows to
+#: include them automatically. Use ``--all`` on the command line to include the
+#: full list defined in :data:`ALL_PLATFORMS`.
+RECOMMENDED_PLATFORMS: dict[OS, list[Architecture]] = {
+    'linux': ['x86_64', 'aarch64'],
+    'windows': ['amd64', 'arm64'],
+    'mac': ['x86_64', 'arm64'],
+}
+
+# Every OS/architecture combination we know about. New entries may still be
+# discovered when parsing wheel filenames.
+ALL_PLATFORMS: dict[OS, list[Architecture]] = {
+    'linux': ['x86_64', 'i686', 'aarch64'],
     'windows': ['win32', 'amd64', 'arm64'],
     'mac': ['x86_64', 'arm64'],
+    'musllinux': ['x86_64', 'i686', 'aarch64'],
 }
 
 Triple = tuple[PyVersion, OS, Architecture]
@@ -164,10 +179,25 @@ def sort_key(python: str) -> tuple:
     return False, python,
 
 
-def identify_wheels(package: str, version: str | None = None, /):
+def identify_wheels(
+    package: str,
+    version: str | None = None,
+    /,
+    *,
+    all: bool = False,
+) -> None:
     """Identify wheels for the given package and version.
 
-    If version is not given it is the latest version of the package.
+    Parameters
+    ----------
+    package:
+        The package name to inspect.
+    version:
+        The package version to inspect. If ``None`` the latest version is
+        used.
+    all:
+        If ``True`` start with :data:`ALL_PLATFORMS` instead of the recommended
+        subset.
     """
     data = get_pypi_json(package)
     if version is None:
@@ -181,7 +211,7 @@ def identify_wheels(package: str, version: str | None = None, /):
     pythons = get_cpython_versions()
     sdist = False
     matrix: Matrix = {}
-    platforms = deepcopy(PLATFORMS)
+    platforms = deepcopy(ALL_PLATFORMS if all else RECOMMENDED_PLATFORMS)
     for r in releases:
         filename = r['filename']
         if filename.endswith('.whl'):

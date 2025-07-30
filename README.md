@@ -46,11 +46,12 @@ Ensure you have Python 3.10 or newer to run `wheel-matrix`.
 To use `wheel-matrix`, run the following command in your terminal:
 
 ```bash
-wheel-matrix <package-name> [<version>]
+wheel-matrix <package-name> [<version>] [--all]
 ```
 
 - `<package-name>`: Name of the Python package for which to generate the wheel matrix.
 - `<version>`: (Optional) Specific version of the package. If not provided, the latest version will be used.
+- `--all`: Include every architecture known to the tool, even those without wheels.
 
 Example:
 
