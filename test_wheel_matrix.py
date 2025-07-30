@@ -23,3 +23,11 @@ def test_universal2():
         ('cp38', 'mac', 'arm64'),
         ('cp39', 'mac', 'arm64'),
     }
+
+
+def test_windows_arm64():
+    """We can identify a Windows ARM64 wheel."""
+    assert get_triples(
+        'foo-1.0-cp311-cp311-win_arm64.whl',
+        cpythons=['cp311'],
+    ) == {('cp311', 'windows', 'arm64')}
