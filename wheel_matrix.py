@@ -158,7 +158,7 @@ def sort_key(python: str) -> tuple:
 
     CPython prefixes sort first, and versions are sorted in descending order.
     """
-    if mo := re.match('([a-z]+)(\d)(\d+)', python):
+    if mo := re.match(r'([a-z]+)(\d)(\d+)', python):
         prefix, maj, min = mo.groups()
         return prefix != 'cp', prefix, -int(maj), -int(min)
     return False, python,
