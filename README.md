@@ -46,12 +46,15 @@ Ensure you have Python 3.10 or newer to run `wheel-matrix`.
 To use `wheel-matrix`, run the following command in your terminal:
 
 ```bash
-wheel-matrix <package-name> [<version>] [--platforms=all]
+wheel-matrix <package-name> [<version>] [--platforms=all] [--output=md|json|gha-matrix]
 ```
 
 - `<package-name>`: Name of the Python package for which to generate the wheel matrix.
 - `<version>`: (Optional) Specific version of the package. If not provided, the latest version will be used.
 - `--platforms=all`: Include every architecture known to the tool, instead of the recommended subset.
+- `--output=`: Select the output format. ``md`` (default) prints a Markdown table,
+  ``json`` prints the raw data and ``gha-matrix`` prints a GitHub Actions matrix
+  describing the missing wheels.
 
 Example:
 
