@@ -32,7 +32,7 @@ def get_arch(tag: str) -> Architecture:
     """Get the architecture targeted by a wheel platform tag.
 
     This only applies for certain OSes, so don't use this directly, use
-    get_os_arch() instead.
+    get_os_arches() instead.
     """
     if tag.endswith('_x86_64'):
         return 'x86_64'
