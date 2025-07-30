@@ -10,7 +10,7 @@ import re
 from packaging.utils import parse_wheel_filename
 from wcwidth import wcswidth
 
-__version__ = '0.3.1'
+__version__ = '0.3.2'
 
 
 OS = str
@@ -20,7 +20,7 @@ PyVersion = str
 
 PLATFORMS = {
     'linux': ['x86_64', 'i686'],
-    'windows': ['win32', 'amd64'],
+    'windows': ['win32', 'amd64', 'arm64'],
     'mac': ['x86_64', 'arm64'],
 }
 
@@ -58,6 +58,9 @@ def get_os_arches(tag: str) -> Iterable[tuple[OS, Architecture]]:
         return
     elif tag == 'win_amd64':
         yield 'windows', 'amd64'
+        return
+    elif tag == 'win_arm64':
+        yield 'windows', 'arm64'
         return
     elif tag.startswith('macosx'):
         if tag.endswith('_universal2'):
