@@ -1,4 +1,5 @@
 """Tests for identification of wheels."""
+import pytest
 from wheel_matrix import get_triples
 
 
@@ -31,3 +32,9 @@ def test_windows_arm64():
         'foo-1.0-cp311-cp311-win_arm64.whl',
         cpythons=['cp311'],
     ) == {('cp311', 'windows', 'arm64')}
+
+
+def test_py3_none_any():
+    """Pure Python wheels do not target a specific OS/architecture."""
+    with pytest.raises(ValueError, match="platform tag 'any'"):
+        get_triples('foo-1.0-py3-none-any.whl', cpythons=['cp312'])
