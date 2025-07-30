@@ -8,6 +8,7 @@ import defopt
 import json
 import re
 from packaging.utils import parse_wheel_filename
+from packaging.tags import Tag
 from wcwidth import wcswidth
 
 __version__ = '0.3.2'
@@ -26,6 +27,10 @@ PLATFORMS = {
 
 Triple = tuple[PyVersion, OS, Architecture]
 Matrix = dict[Triple, bool]
+
+CHECK = '✅'
+CROSS = '❌'
+SNAIL = '🐌'
 
 
 def get_arch(tag: str) -> Architecture:
@@ -47,6 +52,10 @@ def get_arch(tag: str) -> Architecture:
 
 def get_os_arches(tag: str) -> Iterable[tuple[OS, Architecture]]:
     """Identify the OS and architecture targeted by a wheel platform tag."""
+    if tag == 'any':
+        raise ValueError(
+            "platform tag 'any' does not correspond to a specific OS/architecture",
+        )
     if tag.startswith('manylinux'):
         yield 'linux', get_arch(tag)
         return
@@ -182,9 +191,14 @@ def identify_wheels(package: str, version: str | None = None, /):
     sdist = False
     matrix: Matrix = {}
     platforms = deepcopy(PLATFORMS)
+    universal = False
     for r in releases:
         filename = r['filename']
         if filename.endswith('.whl'):
+            pkg, _, _, tags = parse_wheel_filename(filename)
+            if Tag('py3', 'none', 'any') in tags:
+                universal = True
+                continue
             for interpreter, os, arch in get_triples(filename):
                 if arch not in platforms.setdefault(os, []):
                     platforms[os].append(arch)
@@ -204,8 +218,12 @@ def identify_wheels(package: str, version: str | None = None, /):
         row = [python]
         for os, archs in platforms.items():
             for arch in archs:
-                has_wheel = matrix.get((python, os, arch), False)
-                row.append('✅' if has_wheel else '❌')
+                if matrix.get((python, os, arch), False):
+                    row.append(CHECK)
+                elif universal:
+                    row.append(SNAIL)
+                else:
+                    row.append(CROSS)
         table.append(row)
 
     col_widths = [0] * len(table[0])
