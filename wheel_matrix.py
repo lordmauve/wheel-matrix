@@ -34,10 +34,10 @@ RECOMMENDED_PLATFORMS: dict[OS, list[Architecture]] = {
 # Every OS/architecture combination we know about. New entries may still be
 # discovered when parsing wheel filenames.
 ALL_PLATFORMS: dict[OS, list[Architecture]] = {
-    'linux': ['x86_64', 'i686', 'aarch64'],
+    'linux': ['x86_64', 'i686', 'aarch64', 'ppc64le', 's390x'],
     'windows': ['win32', 'amd64', 'arm64'],
     'mac': ['x86_64', 'arm64'],
-    'musllinux': ['x86_64', 'i686', 'aarch64'],
+    'musllinux': ['x86_64', 'i686', 'aarch64', 'ppc64le', 's390x'],
 }
 
 Triple = tuple[PyVersion, OS, Architecture]
@@ -62,6 +62,16 @@ def get_arch(tag: str) -> Architecture:
         return 'aarch64'
     elif tag.endswith('_arm64'):
         return 'arm64'
+    elif tag.endswith('_ppc64le'):
+        return 'ppc64le'
+    elif tag.endswith('_ppc64'):
+        return 'ppc64'
+    elif tag.endswith('_s390x'):
+        return 's390x'
+    elif tag.endswith('_loongarch64'):
+        return 'loongarch64'
+    elif tag.endswith('_riscv64'):
+        return 'riscv64'
     raise ValueError(f'Unknown architecture for {tag}')
 
 

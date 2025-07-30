@@ -34,6 +34,22 @@ def test_windows_arm64():
     ) == {('cp311', 'windows', 'arm64')}
 
 
+def test_linux_ppc64le():
+    """We can identify a linux PPC64LE wheel."""
+    assert get_triples(
+        'foo-1.0-cp311-cp311-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl',
+        cpythons=['cp311'],
+    ) == {('cp311', 'linux', 'ppc64le')}
+
+
+def test_linux_s390x():
+    """We can identify a linux s390x wheel."""
+    assert get_triples(
+        'foo-1.0-cp311-cp311-manylinux_2_17_s390x.manylinux2014_s390x.whl',
+        cpythons=['cp311'],
+    ) == {('cp311', 'linux', 's390x')}
+
+
 def test_py3_none_any():
     """Pure Python wheels do not target a specific OS/architecture."""
     with pytest.raises(ValueError, match="platform tag 'any'"):
