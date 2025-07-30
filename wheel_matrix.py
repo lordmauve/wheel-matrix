@@ -2,7 +2,7 @@
 from copy import deepcopy
 from functools import cache
 import sys
-from typing import Iterable
+from typing import Iterable, Literal
 import httpx
 import defopt
 import json
@@ -22,8 +22,8 @@ PyVersion = str
 #:
 #: These targets are widely used and keep the default table manageable. When
 #: wheel files for additional architectures are encountered the table grows to
-#: include them automatically. Use ``--all`` on the command line to include the
-#: full list defined in :data:`ALL_PLATFORMS`.
+#: include them automatically. Use ``--platforms=all`` on the command line to
+#: start with the full list defined in :data:`ALL_PLATFORMS`.
 RECOMMENDED_PLATFORMS: dict[OS, list[Architecture]] = {
     'linux': ['x86_64', 'aarch64'],
     'windows': ['amd64', 'arm64'],
@@ -184,7 +184,7 @@ def identify_wheels(
     version: str | None = None,
     /,
     *,
-    all: bool = False,
+    platforms: Literal["recommended", "all"] = "recommended",
 ) -> None:
     """Identify wheels for the given package and version.
 
@@ -195,9 +195,9 @@ def identify_wheels(
     version:
         The package version to inspect. If ``None`` the latest version is
         used.
-    all:
-        If ``True`` start with :data:`ALL_PLATFORMS` instead of the recommended
-        subset.
+    platforms:
+        Which platform set to start from: ``"recommended"`` (the default) or
+        ``"all"`` for every known combination.
     """
     data = get_pypi_json(package)
     if version is None:
@@ -211,13 +211,17 @@ def identify_wheels(
     pythons = get_cpython_versions()
     sdist = False
     matrix: Matrix = {}
-    platforms = deepcopy(ALL_PLATFORMS if all else RECOMMENDED_PLATFORMS)
+    platforms_map = {
+        "recommended": RECOMMENDED_PLATFORMS,
+        "all": ALL_PLATFORMS,
+    }
+    active_platforms = deepcopy(platforms_map[platforms])
     for r in releases:
         filename = r['filename']
         if filename.endswith('.whl'):
             for interpreter, os, arch in get_triples(filename):
-                if arch not in platforms.setdefault(os, []):
-                    platforms[os].append(arch)
+                if arch not in active_platforms.setdefault(os, []):
+                    active_platforms[os].append(arch)
                 if interpreter not in pythons:
                     pythons.append(interpreter)
                 matrix[interpreter, os, arch] = True
@@ -226,13 +230,13 @@ def identify_wheels(
 
     headers = ['Python']
     table = [headers]
-    for os, archs in platforms.items():
+    for os, archs in active_platforms.items():
         for arch in archs:
             headers.append(f'{os} {arch}')
     pythons.sort(key=sort_key)
     for python in pythons:
         row = [python]
-        for os, archs in platforms.items():
+        for os, archs in active_platforms.items():
             for arch in archs:
                 has_wheel = matrix.get((python, os, arch), False)
                 row.append('✅' if has_wheel else '❌')
