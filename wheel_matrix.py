@@ -1,14 +1,13 @@
-"""Print a Mardown matrix of wheels."""
+"""Print a Markdown matrix of wheels."""
 from copy import deepcopy
 from functools import cache
 import sys
-from typing import Iterable
+from typing import Iterable, Literal
 import httpx
 import defopt
 import json
 import re
 from packaging.utils import parse_wheel_filename
-from packaging.tags import Tag
 from wcwidth import wcswidth
 
 __version__ = '0.3.2'
@@ -19,25 +18,36 @@ Architecture = str
 PyVersion = str
 
 
-PLATFORMS = {
-    'linux': ['x86_64', 'i686'],
+#: Recommended OS/architecture combinations to display.
+#:
+#: These targets are widely used and keep the default table manageable. When
+#: wheel files for additional architectures are encountered the table grows to
+#: include them automatically. Use ``--platforms=all`` on the command line to
+#: start with the full list defined in :data:`ALL_PLATFORMS`.
+RECOMMENDED_PLATFORMS: dict[OS, list[Architecture]] = {
+    'linux': ['x86_64', 'aarch64'],
+    'windows': ['amd64', 'arm64'],
+    'mac': ['x86_64', 'arm64'],
+}
+
+# Every OS/architecture combination we know about. New entries may still be
+# discovered when parsing wheel filenames.
+ALL_PLATFORMS: dict[OS, list[Architecture]] = {
+    'linux': ['x86_64', 'i686', 'aarch64'],
     'windows': ['win32', 'amd64', 'arm64'],
     'mac': ['x86_64', 'arm64'],
+    'musllinux': ['x86_64', 'i686', 'aarch64'],
 }
 
 Triple = tuple[PyVersion, OS, Architecture]
 Matrix = dict[Triple, bool]
-
-CHECK = '✅'
-CROSS = '❌'
-SNAIL = '🐌'
 
 
 def get_arch(tag: str) -> Architecture:
     """Get the architecture targeted by a wheel platform tag.
 
     This only applies for certain OSes, so don't use this directly, use
-    get_os_arch() instead.
+    get_os_arches() instead.
     """
     if tag.endswith('_x86_64'):
         return 'x86_64'
@@ -167,16 +177,31 @@ def sort_key(python: str) -> tuple:
 
     CPython prefixes sort first, and versions are sorted in descending order.
     """
-    if mo := re.match('([a-z]+)(\d)(\d+)', python):
+    if mo := re.match(r'([a-z]+)(\d)(\d+)', python):
         prefix, maj, min = mo.groups()
         return prefix != 'cp', prefix, -int(maj), -int(min)
     return False, python,
 
 
-def identify_wheels(package: str, version: str | None = None, /):
+def identify_wheels(
+    package: str,
+    version: str | None = None,
+    /,
+    *,
+    platforms: Literal["recommended", "all"] = "recommended",
+) -> None:
     """Identify wheels for the given package and version.
 
-    If version is not given it is the latest version of the package.
+    Parameters
+    ----------
+    package:
+        The package name to inspect.
+    version:
+        The package version to inspect. If ``None`` the latest version is
+        used.
+    platforms:
+        Which platform set to start from: ``"recommended"`` (the default) or
+        ``"all"`` for every known combination.
     """
     data = get_pypi_json(package)
     if version is None:
@@ -190,18 +215,17 @@ def identify_wheels(package: str, version: str | None = None, /):
     pythons = get_cpython_versions()
     sdist = False
     matrix: Matrix = {}
-    platforms = deepcopy(PLATFORMS)
-    universal = False
+    platforms_map = {
+        "recommended": RECOMMENDED_PLATFORMS,
+        "all": ALL_PLATFORMS,
+    }
+    active_platforms = deepcopy(platforms_map[platforms])
     for r in releases:
         filename = r['filename']
         if filename.endswith('.whl'):
-            pkg, _, _, tags = parse_wheel_filename(filename)
-            if Tag('py3', 'none', 'any') in tags:
-                universal = True
-                continue
             for interpreter, os, arch in get_triples(filename):
-                if arch not in platforms.setdefault(os, []):
-                    platforms[os].append(arch)
+                if arch not in active_platforms.setdefault(os, []):
+                    active_platforms[os].append(arch)
                 if interpreter not in pythons:
                     pythons.append(interpreter)
                 matrix[interpreter, os, arch] = True
@@ -210,20 +234,16 @@ def identify_wheels(package: str, version: str | None = None, /):
 
     headers = ['Python']
     table = [headers]
-    for os, archs in platforms.items():
+    for os, archs in active_platforms.items():
         for arch in archs:
             headers.append(f'{os} {arch}')
     pythons.sort(key=sort_key)
     for python in pythons:
         row = [python]
-        for os, archs in platforms.items():
+        for os, archs in active_platforms.items():
             for arch in archs:
-                if matrix.get((python, os, arch), False):
-                    row.append(CHECK)
-                elif universal:
-                    row.append(SNAIL)
-                else:
-                    row.append(CROSS)
+                has_wheel = matrix.get((python, os, arch), False)
+                row.append('✅' if has_wheel else '❌')
         table.append(row)
 
     col_widths = [0] * len(table[0])
