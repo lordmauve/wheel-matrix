@@ -11,7 +11,7 @@ from packaging.utils import parse_wheel_filename
 from packaging.tags import Tag
 from wcwidth import wcswidth
 
-__version__ = '0.3.2'
+__version__ = '0.4.0'
 
 
 OS = str
