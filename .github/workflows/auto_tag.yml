@@ -55,4 +55,5 @@ jobs:
           git push origin "v$VERSION"
 
       - name: Publish package distributions to PyPI
+        if: steps.check-tag.outputs.exists == 'false'
         uses: pypa/gh-action-pypi-publish@release/v1
