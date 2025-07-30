@@ -47,6 +47,21 @@ CHECK = '✅'
 CROSS = '❌'
 SNAIL = '🐌'
 
+# Mapping from (OS, Architecture) to a suitable GitHub Actions runner.
+RUNNER_MAP: dict[tuple[OS, Architecture], str] = {
+    ('linux', 'x86_64'): 'ubuntu-latest',
+    ('linux', 'aarch64'): 'ubuntu-24.04-arm',
+    ('linux', 'i686'): 'ubuntu-latest',
+    ('windows', 'win32'): 'windows-latest',
+    ('windows', 'amd64'): 'windows-latest',
+    ('windows', 'arm64'): 'windows-11-arm',
+    ('mac', 'x86_64'): 'macos-13',
+    ('mac', 'arm64'): 'macos-latest',
+    ('musllinux', 'x86_64'): 'ubuntu-latest',
+    ('musllinux', 'i686'): 'ubuntu-latest',
+    ('musllinux', 'aarch64'): 'ubuntu-24.04-arm',
+}
+
 
 def get_arch(tag: str) -> Architecture:
     """Get the architecture targeted by a wheel platform tag.
@@ -188,25 +203,131 @@ def sort_key(python: str) -> tuple:
     return False, python,
 
 
+def output_md(
+    pythons: list[str],
+    platforms: dict[OS, list[Architecture]],
+    matrix: Matrix,
+    universal: bool,
+) -> None:
+    """Render the table in Markdown format.
+
+    :param pythons: List of interpreter codes.
+    :param platforms: Active platforms keyed by operating system.
+    :param matrix: Mapping of triples to availability.
+    :param universal: Whether a universal wheel exists.
+    """
+
+    headers = ['Python']
+    table = [headers]
+    for os, archs in platforms.items():
+        for arch in archs:
+            headers.append(f'{os} {arch}')
+    pythons.sort(key=sort_key)
+    for python in pythons:
+        row = [python]
+        for os, archs in platforms.items():
+            for arch in archs:
+                if matrix.get((python, os, arch), False):
+                    row.append(CHECK)
+                elif universal:
+                    row.append(SNAIL)
+                else:
+                    row.append(CROSS)
+        table.append(row)
+
+    col_widths = [0] * len(table[0])
+    for row in table:
+        for i, v in enumerate(row):
+            col_widths[i] = max(col_widths[i], wcswidth(v))
+    table.insert(1, ['-' * w for w in col_widths])
+
+    for row in table:
+        print(
+            '| {} |'.format(
+                ' | '.join(
+                    v + ' ' * (w - wcswidth(v))
+                    for v, w in zip(row, col_widths)
+                )
+            )
+        )
+
+
+def output_json(
+    pythons: list[str],
+    platforms: dict[OS, list[Architecture]],
+    matrix: Matrix,
+    universal: bool,
+) -> None:
+    """Render the table data in JSON format.
+
+    :param pythons: List of interpreter codes.
+    :param platforms: Active platforms keyed by operating system.
+    :param matrix: Mapping of triples to availability.
+    :param universal: Whether a universal wheel exists.
+    """
+
+    entries = [
+        {
+            'python': p,
+            'os': os,
+            'arch': arch,
+            'available': available,
+        }
+        for (p, os, arch), available in matrix.items()
+    ]
+    data = {
+        'pythons': pythons,
+        'platforms': platforms,
+        'universal': universal,
+        'matrix': entries,
+    }
+    print(json.dumps(data, indent=2, sort_keys=True))
+
+
+def output_gha_matrix(
+    pythons: list[str],
+    platforms: dict[OS, list[Architecture]],
+    matrix: Matrix,
+    universal: bool,
+) -> None:
+    """Render missing wheels as a GitHub Actions matrix in JSON format.
+
+    :param pythons: List of interpreter codes.
+    :param platforms: Active platforms keyed by operating system.
+    :param matrix: Mapping of triples to availability.
+    :param universal: Whether a universal wheel exists.
+    """
+
+    jobs: list[dict[str, str]] = []
+    for python in pythons:
+        version = '{0}.{1}'.format(*interp_to_version(python))
+        for os, archs in platforms.items():
+            for arch in archs:
+                if matrix.get((python, os, arch), False) or universal:
+                    continue
+                runner = RUNNER_MAP.get((os, arch))
+                if runner is None:
+                    continue
+                jobs.append({'os': runner, 'python': version})
+    print(json.dumps(jobs, indent=2, sort_keys=True))
+
+
 def identify_wheels(
     package: str,
     version: str | None = None,
     /,
     *,
     platforms: Literal["recommended", "all"] = "recommended",
+    output: Literal["md", "json", "gha-matrix"] = "md",
 ) -> None:
     """Identify wheels for the given package and version.
 
-    Parameters
-    ----------
-    package:
-        The package name to inspect.
-    version:
-        The package version to inspect. If ``None`` the latest version is
-        used.
-    platforms:
-        Which platform set to start from: ``"recommended"`` (the default) or
-        ``"all"`` for every known combination.
+    :param package: The package name to inspect.
+    :param version: The package version to inspect. ``None`` means the latest.
+    :param platforms: Which platform set to start from: ``"recommended"`` or
+        ``"all"``.
+    :param output: Format of the result: ``"md"`` (default), ``"json"`` or
+        ``"gha-matrix"``.
     """
     data = get_pypi_json(package)
     if version is None:
@@ -242,33 +363,13 @@ def identify_wheels(
         elif filename.endswith('.tar.gz'):
             sdist = True
 
-    headers = ['Python']
-    table = [headers]
-    for os, archs in active_platforms.items():
-        for arch in archs:
-            headers.append(f'{os} {arch}')
-    pythons.sort(key=sort_key)
-    for python in pythons:
-        row = [python]
-        for os, archs in active_platforms.items():
-            for arch in archs:
-                if matrix.get((python, os, arch), False):
-                    row.append(CHECK)
-                elif universal:
-                    row.append(SNAIL)
-                else:
-                    row.append(CROSS)
-        table.append(row)
 
-    col_widths = [0] * len(table[0])
-    for row in table:
-        for i, v in enumerate(row):
-            col_widths[i] = max(col_widths[i], wcswidth(v))
-    table.insert(1, ['-' * w for w in col_widths])
-
-    for row in table:
-        print('| {} |'.format(
-            ' | '.join(v + ' ' * (w - wcswidth(v)) for v, w in zip(row, col_widths))))
+    outputters = {
+        'md': output_md,
+        'json': output_json,
+        'gha-matrix': output_gha_matrix,
+    }
+    outputters[output](pythons, active_platforms, matrix, universal)
 
 
 def main():
