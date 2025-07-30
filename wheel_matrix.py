@@ -1,4 +1,4 @@
-"""Print a Mardown matrix of wheels."""
+"""Print a Markdown matrix of wheels."""
 from copy import deepcopy
 from functools import cache
 import sys
