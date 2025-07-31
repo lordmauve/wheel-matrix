@@ -29,7 +29,10 @@ This table was produced by `wheel-matrix pyfxr`:
 | pp37   | ✅           | ✅         | ✅            | ✅            | ✅            | ✅         | ❌        | ❌                | ❌             | ❌               |
 | pp38   | ✅           | ✅         | ✅            | ❌            | ✅            | ✅         | ✅        | ❌                | ❌             | ❌               |
 | pp39   | ✅           | ✅         | ✅            | ❌            | ✅            | ✅         | ✅        | ❌                | ❌             | ❌               |
-
+In this table:
+- ✅ indicates a wheel exists for that Python/version and platform.
+- ❌ means no wheel is available.
+- 🐌 shows that a universal wheel (`py3-none-any`) is available.
 
 ## Installation
 
