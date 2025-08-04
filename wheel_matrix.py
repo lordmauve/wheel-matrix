@@ -129,7 +129,8 @@ def get_cpython_versions() -> list[str]:
     CPython repository. This approach excludes EOL interpreters (the branch is
     deleted) and also alpha releases (the branch is not yet cut, development
     happens on ``main``.) Free-threaded variants are appended for versions
-    3.13 and above.
+    3.14 and above. Earlier free-threaded builds such as ``cp313t`` are
+    discovered only when wheels specifically target them.
     """
     found: set[tuple[int, int]] = set()
     for branch in get_github_repo_branches('python', 'cpython'):
@@ -140,7 +141,7 @@ def get_cpython_versions() -> list[str]:
     for maj, min in sorted(found, reverse=True):
         base = f'cp{maj}{min}'
         versions.append(base)
-        if maj == 3 and min >= 13:
+        if maj == 3 and min >= 14:
             versions.append(f'{base}t')
     return versions
 
