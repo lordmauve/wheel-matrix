@@ -1,4 +1,5 @@
 """Tests for identification of wheels."""
+
 import pytest
 from wheel_matrix import get_triples
 
@@ -54,3 +55,19 @@ def test_py3_none_any():
     """Pure Python wheels do not target a specific OS/architecture."""
     with pytest.raises(ValueError, match="platform tag 'any'"):
         get_triples('foo-1.0-py3-none-any.whl', cpythons=['cp312'])
+
+
+def test_free_threaded():
+    """We can identify a free-threaded CPython wheel."""
+    assert get_triples(
+        'foo-1.0-cp313-cp313t-manylinux_2_17_x86_64.whl',
+        cpythons=['cp313', 'cp313t'],
+    ) == {('cp313t', 'linux', 'x86_64')}
+
+
+def test_abi3_excludes_free_threaded():
+    """"abi3" wheels do not apply to free-threaded builds."""
+    assert get_triples(
+        'foo-1.0-cp38-abi3-manylinux_2_17_x86_64.whl',
+        cpythons=['cp38', 'cp313', 'cp313t'],
+    ) == {('cp38', 'linux', 'x86_64'), ('cp313', 'linux', 'x86_64')}
