@@ -128,17 +128,21 @@ def get_cpython_versions() -> list[str]:
     We use the GitHub REST API for this, to find the dev branches in the
     CPython repository. This approach excludes EOL interpreters (the branch is
     deleted) and also alpha releases (the branch is not yet cut, development
-    happens on `main`.)
+    happens on ``main``.) Free-threaded variants are appended for versions
+    3.13 and above.
     """
-    found: set[tuple[int, ...]] = set()
+    found: set[tuple[int, int]] = set()
     for branch in get_github_repo_branches('python', 'cpython'):
         if mo := re.match(r'(\d+)\.(\d+)', branch):
             maj, min = mo.groups()
             found.add((int(maj), int(min)))
-    return [
-        'cp{}{}'.format(*v)
-        for v in sorted(found, reverse=True)
-    ]
+    versions: list[str] = []
+    for maj, min in sorted(found, reverse=True):
+        base = f'cp{maj}{min}'
+        versions.append(base)
+        if maj == 3 and min >= 13:
+            versions.append(f'{base}t')
+    return versions
 
 
 def get_github_repo_branches(owner: str, repo: str) -> list[str]:
@@ -169,8 +173,8 @@ def interp_to_version(interp: str) -> tuple[int, int]:
     >>> interp_to_version('cp310')
     (3, 10)
     """
-    if mo := re.match(r'[a-z]{2}(\d)(\d+)', interp):
-        maj, minor = mo.groups()
+    if mo := re.match(r'[a-z]{2}(\d)(\d+)(t?)', interp):
+        maj, minor, _ = mo.groups()
         return int(maj), int(minor)
     raise ValueError(f"Failed to parse interpreter string {interp!r}")
 
@@ -179,8 +183,16 @@ def get_triples(
     wheel_filename: str,
     cpythons: list[str] | None = None,
 ) -> set[Triple]:
-    """Get the (PyVersion, OS, Architecture) triples served by the given wheel.
+    """Get the (PyVersion, OS, Architecture) triples served by a wheel.
 
+    Free-threaded wheels are identified by an ABI tag ending with ``"t"`` and
+    are reported using interpreter codes such as ``"cp313t"``. "abi3" wheels do
+    not match free-threaded interpreters.
+
+    :param wheel_filename: Name of the wheel file to analyse.
+    :param cpythons: Known CPython interpreter codes; ``None`` uses the full
+        list of maintained versions.
+    :returns: A set of ``(PyVersion, OS, Architecture)`` triples.
     """
     if cpythons is None:
         cpythons = get_cpython_versions()
@@ -188,14 +200,20 @@ def get_triples(
     triples = set()
     pkg, v, build, tags = parse_wheel_filename(wheel_filename)
     for tag in tags:
-        if tag.abi == 'abi3':
+        interpreter = tag.interpreter
+        abi = tag.abi
+        if abi.endswith('t') and abi[:-1] == interpreter:
+            interpreter = abi
+        if interpreter.endswith('t') and abi == 'abi3':
+            continue
+        if abi == 'abi3':
             minversion = interp_to_version(tag.interpreter)
             interpreters = {tag.interpreter} | {
                 p for p in cpythons
-                if interp_to_version(p) >= minversion
+                if not p.endswith('t') and interp_to_version(p) >= minversion
             }
         else:
-            interpreters = {tag.interpreter}
+            interpreters = {interpreter}
         for os, arch in get_os_arches(tag.platform):
             for i in interpreters:
                 triples.add((i, os, arch))
@@ -206,10 +224,12 @@ def sort_key(python: str) -> tuple:
     """Return a key with which to compare Python interpreter codes.
 
     CPython prefixes sort first, and versions are sorted in descending order.
+    Free-threaded variants (``"cp3nnt"``) are placed immediately after their
+    GIL-enabled counterparts.
     """
-    if mo := re.match(r'([a-z]+)(\d)(\d+)', python):
-        prefix, maj, min = mo.groups()
-        return prefix != 'cp', prefix, -int(maj), -int(min)
+    if mo := re.match(r'([a-z]+)(\d)(\d+)(t?)', python):
+        prefix, maj, min, t = mo.groups()
+        return prefix != 'cp', prefix, -int(maj), -int(min), t != ''
     return False, python,
 
 
