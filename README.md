@@ -34,6 +34,94 @@ In this table:
 - ❌ means no wheel is available.
 - 🐌 shows that a universal wheel (`py3-none-any`) is available.
 
+## GitHub Actions Matrix Output
+
+The `gha-matrix` output format is specifically designed for integration with GitHub Actions workflows. It generates a JSON array describing the missing wheels that need to be built.
+
+### Output Format
+
+When you run `wheel-matrix` with `--output=gha-matrix`, it produces a JSON array where each element represents a missing wheel. Each object contains:
+
+- `os`: The GitHub Actions runner to use (e.g., `ubuntu-latest`, `windows-latest`, `macos-13`, `macos-latest`)
+- `python`: The Python version as a string (e.g., `"3.13"`, `"3.12"`, `"3.11"`)
+
+Example output:
+```json
+[
+  {
+    "os": "ubuntu-latest",
+    "python": "3.13"
+  },
+  {
+    "os": "windows-latest",
+    "python": "3.13"
+  },
+  {
+    "os": "macos-latest",
+    "python": "3.13"
+  }
+]
+```
+
+### Usage in GitHub Actions
+
+You can use this output to create a dynamic build matrix in GitHub Actions that builds only the missing wheels. Here's a complete example workflow:
+
+```yaml
+name: Build Missing Wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package name'
+        required: true
+      version:
+        description: 'Package version (optional)'
+        required: false
+
+jobs:
+  generate-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Install wheel-matrix
+        run: pip install wheel-matrix
+
+      - name: Generate matrix
+        id: set-matrix
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            MATRIX=$(wheel-matrix ${{ github.event.inputs.package }} ${{ github.event.inputs.version }} --output=gha-matrix)
+          else
+            MATRIX=$(wheel-matrix ${{ github.event.inputs.package }} --output=gha-matrix)
+          fi
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+  build-wheels:
+    needs: generate-matrix
+    if: needs.generate-matrix.outputs.matrix != '[]'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Build wheel
+        run: |
+          # Your wheel building steps here
+          # For example, using cibuildwheel or build
+          pip install build
+          # ... additional build commands
+```
+
+This approach ensures that you only run build jobs for the platform and Python version combinations where wheels are actually missing, saving CI/CD resources and time.
+
 ## Installation
 
 `wheel-matrix` can be installed from PyPI with pip:
